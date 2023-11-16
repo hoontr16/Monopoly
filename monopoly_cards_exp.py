@@ -1,0 +1,37 @@
+chance = {
+    0: 'Advance to Go. Collect $200',
+    1: 'Advance to Illinois Ave.',
+    2: 'Advance to St. Charles Place',
+    3: 'Advance token to the nearest utility',
+    4: 'Advance to the nearest Railroad. If owned, pay owner twice the normal rent.',
+    5: 'Advance to the nearest Railroad. If owned, pay owner twice the normal rent.',
+    6: 'Bank pays you dividend of $50',
+    7: 'Get out of Jail Free',
+    8: 'Go back three spaces',
+    9: 'Go to Jail. Go directly to Jail.',
+    10: 'Make general repairs on all your property: For each house pay $25, for each hotel pay $100',
+    11: 'Take a ride on the Reading',
+    12: 'Pay Poor Tax of $15',
+    13: 'Take a walk on the Boardwalk',
+    14: 'You have been elected Chairman of the Board. Pay each player $50',
+    15: 'Your building loan matures. Collect $150'
+}
+community_chest = {
+    0: 'Advance to Go. Collect $200',
+    1: 'Bank error in your favor. Collect $200',
+    2: "Doctor's fees. Pay $50",
+    3: 'From sale of stock you get $50',
+    4: 'Get out of Jail Free',
+    5: 'Go to Jail. Go directly to Jail.',
+    6: 'Grand Opera Night. Collect $50 from every player for opening night seats',
+    7: 'Holiday Fund matures. Collect $100',
+    8: 'Income tax refund. Collect $20',
+    9: "It's your birthday. Collect $10 from every player",
+    10: 'Life insurance matures. Collect $100',
+    11: 'Hospital fees. Pay $50',
+    12: 'School fees. Pay $50',
+    13: 'Receive $25 consultancy fee',
+    14: 'You are assessed for street repairs. Pay $40 per house and $115 per hotel you own',
+    15: 'You have won second prize in a beauty contest. Collect $10',
+    16: 'You inherit $100'
+}
