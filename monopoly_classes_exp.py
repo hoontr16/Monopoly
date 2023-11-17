@@ -34,6 +34,12 @@ class Deck:
             self.type = 'cc'
         self.order = list(self.deck.keys())
         
+    def __str__(self):
+        return f"{'Chance' if self.type == 'chance' else 'Community Chest'} deck. Cards left: {len(self.order)}"
+    
+    def __repr__(self):
+        return f"<{self.type} Deck object with cards {self.deck}>"
+        
     def draw_card(self):
         """ Draw a card.
         
