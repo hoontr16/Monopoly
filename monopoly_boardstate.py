@@ -4,6 +4,7 @@ from monopoly_classes_exp import Auction, Deck, Movement
 from monopoly_exceptions import LoserError
 from monopoly_command import Command
 from monopoly_basic_exp import advprint
+from time import time, localtime
 
 class BoardState:    
     """ The current game state, created once per game and modified as it goes on.
@@ -41,6 +42,10 @@ class BoardState:
         self.chance = Deck('chance')
         self.cc = Deck('cc')
         self.plost = []
+        self.time = localtime(time)
+        
+    def __repr__(self):
+        return f"<BoardState object saved at {self.time}>"
         
     def whose_turn(self):
         """ Determine whose turn it is.
