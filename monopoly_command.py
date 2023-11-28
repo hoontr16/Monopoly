@@ -76,7 +76,7 @@ class Command:
             except:
                 raise ValueError('unrecognized command')
         elif self.type == 'turn':
-            if self.text in ('roll', 'jail', 'build', 'exit', 'debug'):
+            if self.text in ('roll', 'jail', 'build', 'exit', 'debug', 'unmortgage'):
                 if self.text == 'jail':
                     if not self.state.cp.inJail:
                         advprint("You aren't in Jail!")
@@ -127,11 +127,36 @@ class Command:
                         else:
                             continue
                     return 'loop'
+                elif self.text == 'unmortgage':
+                    x = input("What property would you like to unmortgage?")
+                    prop = self.state.find_prop(x)
+                    self.state.get_mortgaged_prop(self.state.cp, prop)
+                    new = Command(self.state, self.type, self.prompt)
+                    return new.action()
                 else:
                     raise ValueError("Unrecognized command")
             else:
                 raise ValueError('unrecognized command')
         elif self.type == 'trade':
+            def parse_offer(offer):
+                props = []
+                cards = 0
+                money = 0
+                error = 0
+                for i in offer:
+                    try:
+                        cards = int(i)
+                    except ValueError:
+                        if i[0] == '$':
+                            money = int(i[1:])
+                        else:
+                            x = self.state.findprop(i)
+                            if x:
+                                props.append(x)
+                            else:
+                                advprint("There was an error entering your properties.")
+                                error += 1
+                return props, cards, money, error
             p_input = Command(self.state, '', 'Who wants to trade?\n')
             pnames = p_input.text.strip().split()
             if len(pnames) == 1:
@@ -152,59 +177,47 @@ class Command:
             turncount = 0
             while turncount < 3:
                 request = Command(self.state, 'property', f"What does {p1} want to trade for?\n")
-                rlist = [self.state.find_prop(i) for i in request.text.split(', ')]
-                while None in rlist:
-                    advprint('Error: property not found')
-                    request = Command(self.state, 'property', f"What does {p1} want to trade for?\n")
-                    rlist = [self.state.find_prop(i) for i in request.text.split(', ')]
-                for r in rlist:
+                rlist = request.text.strip().split(', ')
+                while not rlist:
+                    request = Command(self.state, 'request', 'Please enter your request, like this: {property1, property2, ...}, ${money}, {GOJF card(s)}\n')
+                rprops, rcards, rmoney, rerror = parse_offer(request)
+                for r in rprops:
                     if r not in p2.deeds[r.set]:
                         advprint(f"{p2} does not own {r}")
-                        continue
+                        rerror += 1
+                if rerror:
+                    continue
                 offer = Command(self.state, 'offering', f"What does {p1} offer?\n")
                 olist = offer.text.strip().split(', ')
                 while not olist:
                     offer = Command(self.state, 'offering', 'Please enter your offer, like this: {property1, property2, ...}, ${money}, {GOJF card(s)}\n')
                     olist = offer.text.strip().split(', ')
-                props = []
-                cards = 0
-                money = 0
-                error = 0
-                for i in olist:
-                    try:
-                        cards = int(i)
-                    except ValueError:
-                        if i[0] == '$':
-                            money = int(i[1:])
-                        else:
-                            x = self.state.findprop(i)
-                            if x:
-                                props.append(x)
-                            else:
-                                advprint("There was an error entering your properties.")
-                                error += 1
-                if error:
+ 
+                oprops, ocards, omoney, oerror = parse_offer(olist)
+                if oerror:
                     continue                
                 advprint(f"{p1}'s request:")
-                for prop in rlist:
+                advprint(f"GOJF cards: {rcards}")
+                advprint(f'Money: ${rmoney}')
+                for prop in rprops:
                     advprint(prop)
                 print()
                 advprint(f"{p1}'s offerings:")
-                if cards:
-                    advprint(f"GOJF cards: {cards}")
-                if money:
-                    advprint(f"Money: ${money}")
-                for prop in props:
+                advprint(f"GOJF cards: {ocards}")
+                advprint(f"Money: ${omoney}")
+                for prop in oprops:
                     advprint(prop)
                 p2choice = input(f"{p2}, do you accept? Enter either yes, no, or counter\n").strip().lower()
                 if p2choice in ('yes', 'y'):
                     try:
-                        p1 -= money
-                        p2 += money
+                        p1 -= omoney
+                        p2 += omoney
+                        p2 -= rmoney
+                        p2 += omoney
                     except LoserError:
                         return
-                    if cards:
-                        if cards == 2:
+                    if rcards:
+                        if rcards == 2:
                             p1.chance -= 1
                             p1.cc -= 1
                             p2.chance += 1
@@ -217,10 +230,24 @@ class Command:
                             p2.cc += 1
                         else:
                             advprint('oops!')
-                    for prop in props:
+                    if ocards:
+                        if ocards == 2:
+                            p1.chance += 1
+                            p1.cc += 1
+                            p2.chance -= 1
+                            p2.cc -= 1
+                        elif p1.chance:
+                            p1.chance += 1
+                            p2.chance -= 1
+                        elif p1.cc:
+                            p1.cc += 1
+                            p2.cc -= 1
+                        else:
+                            advprint('oops!')
+                    for prop in oprops:
                         p1 -= prop
                         p2 += prop
-                    for r in rlist:
+                    for r in rprops:
                         p2 -= r
                         p1 += r
                     break

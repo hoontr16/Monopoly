@@ -109,6 +109,11 @@ class Player:
             advprint(f"{self.name}'s current balance: ${self.wallet}")
             return self
         elif isinstance(other, Property):
+            if other.mstatus:
+                advprint("This property is mortgaged.")
+                a = self.game.get_mortgaged_prop(self, other)
+                if not a:
+                    return self
             self.deeds[other.set].append(other)
             other.owner = self
             return self

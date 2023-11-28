@@ -16,7 +16,7 @@ def main(pdef=[]):
                 break
             a = 'loop'
             while a not in (None, 'exit'):
-                command = Command(current_state, 'turn', f'\nWhat would {current_state.cp.name} like to do? note: only [roll, jail, build, info, trade, exit, debug, load] are currently implemented ')
+                command = Command(current_state, 'turn', f'\nWhat would {current_state.cp.name} like to do? note: only [roll, jail, build, info, trade, exit, debug, save, load, unmortgage] are currently implemented ')
                 try:
                     a = command.action()
                 except (ValueError, TypeError, FileNotFoundError) as e:

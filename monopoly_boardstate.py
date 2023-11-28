@@ -514,6 +514,59 @@ class BoardState:
         except LoserError:
             return
     
+    def get_mortgaged_prop(self, playr, prop):
+        if not prop.mstatus:
+            raise ValueError("This property is not mortgaged")
+        prop.owner = playr
+        c = Command(self, 'rich', f"{playr.name}, would you like to unmortgage {prop}, or pay 10% interest? Enter either 'unmortgage' or 'interest': ")
+        while True:
+            try:
+                c1 = c.action()
+                break
+            except:
+                advprint("Please enter either 'unmortgage' or 'interest'")
+                c = Command(self, 'rich', f"{playr.name}, would you like to unmortgage {prop}, or pay 10% interest? Enter either 'unmortgage' or 'interest': ")
+        if c1:
+            mstat = prop.unmortgage()
+            if not mstat:
+                choice = ''
+                while choice.text not in ('y', 'n'):
+                    choice = Command(self, 'choice', 'Would you like to raise money for this? y or n ')
+                choice = choice.action()
+                if choice:
+                    self.raise_money(playr, 'the Bank', prop.mprice)
+                    prop.unmortgage()
+                elif playr.wallet < prop.mprice // 10:
+                    choice = ''
+                    while choice.text not in ('y', 'n'):
+                        choice = Command(self, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ")
+                    if choice.action():
+                        advprint(f'You pay the ${prop.mprice // 10} interest')
+                        playr -= prop.mprice // 10
+                    else:
+                        prop.owner = None
+                        return False
+                else:
+                    advprint(f'You pay ${prop.mprice // 10} in interest instead')
+                    playr -= prop.mprice // 10
+                    return True
+            else:
+                return True
+        elif playr.wallet < prop.mprice // 10:
+            choice = ''
+            while choice not in ('y', 'n'):
+                choice = Command(self, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ").text
+            if choice.action():
+                advprint(f'You pay the ${prop.mprice // 10} interest')
+                playr -= prop.mprice // 10
+            else:
+                prop.owner = None
+                return False
+        else:
+            playr -= prop.mprice // 10
+        return True
+            
+    
     def lose(self, loser, creditor):
         """ Removes the current player from the game.
         
@@ -544,54 +597,9 @@ class BoardState:
             try:
                 for aset in loser.deeds:
                     for p in loser.deeds[aset]:
-                        p.owner = creditor
-                        c = Command(self, 'rich', f"{creditor.name}, would you like to unmortgage {p}, or pay 10% interest? Enter either 'unmortgage' or 'interest': ")
-                        while True:
-                            try:
-                                c1 = c.action()
-                                break
-                            except:
-                                advprint("Please enter either 'unmortgage' or 'interest'")
-                                c = Command(self, 'rich', f"{creditor.name}, would you like to unmortgage {p}, or pay 10% interest? Enter either 'unmortgage' or 'interest': ")
-                        if c.text == 'unmortgage':
-                            mstat = p.unmortgage()
-                            if not mstat:
-                                choice = ''
-                                while choice not in ('y', 'n'):
-                                    choice = Command(self, 'choice', 'Would you like to raise money for this? y or n ').text
-                                choice = choice.action()
-                                if choice:
-                                    self.raise_money(creditor, 'the Bank', p.mprice)
-                                    p.unmortgage()
-                                elif creditor.wallet < p.mprice // 10:
-                                    choice = ''
-                                    while choice not in ('y', 'n'):
-                                        choice = Command(self, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ").text
-                                    if choice.action():
-                                        advprint(f'You pay the ${p.mprice // 10} interest')
-                                        creditor -= p.mprice // 10
-                                    else:
-                                        p.owner = None
-                                        continue
-                                else:
-                                    advprint(f'You pay ${p.mprice // 10} in interest instead')
-                                    creditor -= p.mprice // 10
-                                    creditor += p
-                            else:
-                                creditor += p
-                        elif creditor.wallet < p.mprice // 10:
-                            choice = ''
-                            while choice not in ('y', 'n'):
-                                choice = Command(self, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ").text
-                            if choice.action():
-                                advprint(f'You pay the ${p.mprice // 10} interest')
-                                creditor -= p.mprice // 10
-                            else:
-                                p.owner = None
-                                continue
-                        else:
-                            creditor -= p.mprice // 10
-                        creditor += p
+                        a = self.get_mortgaged_prop(creditor, p)
+                        if a:
+                            creditor += p
                     loser.deeds[aset].clear()
                     creditor * aset
             except LoserError:
