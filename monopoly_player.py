@@ -87,7 +87,7 @@ class Player:
                 sell a house, returns None
             else, the Player has lost, returning 1
         """
-        for aset in self.deeds.values:
+        for aset in self.deeds.values():
             for p in aset:
                 if not p.mstatus or p.bnum:
                     return
@@ -167,6 +167,11 @@ def make_players(state):
     while p_input.lower() != 'stop':
         p_input = p_input.replace(' ', '_')
         p_det = Player(p_input, 0, state)
+        if p_input.lower() in protected_words:
+            advprint("Invald name")
+            continue
+        else:
+            protected_words.append(p_input.lower())
         players.append(p_det)
         p_input = input(f'Player {len(players) + 1}, enter your name: ')
     shuffle(players)
@@ -176,3 +181,7 @@ def make_players(state):
         x += 1
         advprint(i.name, i.turn)
     return players
+
+protected_words = ['player', 'property', 'railroad', 'utility', 'input', 'print',
+                   'advprint', 'players', 'self', 'set', 'list', 'str', 'dict', 
+                   'repr', 'copy', 'save', 'savestate']

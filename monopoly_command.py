@@ -1,5 +1,6 @@
 from monopoly_basic_exp import roll_dice, advprint
 from monopoly_exceptions import LoserError
+from jsonsaver import save, SaveState
 
 class Command:
     def __init__(self, state, mytype, prompt):
@@ -10,6 +11,9 @@ class Command:
         if self.text == 'trade':
             self.oldtype = self.type
             self.type = 'trade'
+        if self.text[:4] in ('load', 'save'):
+            self.oldtype = self.type
+            self.type = self.text[:4]
         self.prompt = prompt
         
     def action(self):
@@ -148,11 +152,11 @@ class Command:
             turncount = 0
             while turncount < 3:
                 request = Command(self.state, 'property', f"What does {p1} want to trade for?\n")
-                rlist = [self.state.findprop(i) for i in request.text.split(', ')]
+                rlist = [self.state.find_prop(i) for i in request.text.split(', ')]
                 while None in rlist:
                     advprint('Error: property not found')
                     request = Command(self.state, 'property', f"What does {p1} want to trade for?\n")
-                    rlist = [self.state.findprop(i) for i in request.text.split(', ')]
+                    rlist = [self.state.find_prop(i) for i in request.text.split(', ')]
                 for r in rlist:
                     if r not in p2.deeds[r.set]:
                         advprint(f"{p2} does not own {r}")
@@ -230,5 +234,17 @@ class Command:
             if self.oldtype:
                 new = Command(self.state, self.oldtype, self.prompt)
                 return new.action()
+        elif self.type == 'save':
+            t = self.text.split(maxsplit=1)
+            advprint('saving state')
+            save(self.state, path=t[1])
+            if self.oldtype:
+                new = Command(self.state, self.oldtype, self.prompt)
+                return new.action()
+        elif self.type == 'load':
+            t = self.text.split()
+            advprint('loading state')
+            s = SaveState(t[1])
+            return s.load()        
         else:
             raise TypeError(f"Commands of type {self.type} do not support the action() method")

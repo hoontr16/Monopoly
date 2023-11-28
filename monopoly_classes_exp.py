@@ -3,7 +3,6 @@ from monopoly_property import board_spaces
 from monopoly_cards_exp import chance, community_chest as cc
 from random import shuffle
 from monopoly_basic_exp import roll_dice, advprint
-from time import sleep
 
 class Deck:
     """ A class for the decks of Chance & Community Chest cards.
@@ -13,7 +12,7 @@ class Deck:
         type (str): whether self is a Chance or Community Chest deck
         order (list): a list of deck's keys, in their shuffled order.
     """
-    def __init__(self, type):
+    def __init__(self, mytype, pdef=[]):
         """ Initialize a Deck object.
         
         Arguments:
@@ -22,17 +21,26 @@ class Deck:
         Side effects:
             shuffles the order of the deck, and sets attributes
         """
-        if type == 'chance':
-            k = list(chance.items())
-            shuffle(k)
-            self.deck = dict(k)
-            self.type = 'chance'
+        if not pdef:
+            if mytype == 'chance':
+                k = list(chance.items())
+                shuffle(k)
+                self.deck = dict(k)
+                self.type = 'chance'
+            else:
+                k = list(cc.items())
+                shuffle(k)
+                self.deck = dict(k)
+                self.type = 'cc'
+            self.order = list(self.deck.keys())
         else:
-            k = list(cc.items())
-            shuffle(k)
-            self.deck = dict(k)
-            self.type = 'cc'
-        self.order = list(self.deck.keys())
+            if mytype == 'chance':
+                self.deck = pdef
+                self.type = 'chance'
+            else:
+                self.deck = pdef
+                self.type = 'cc'
+            self.order = list(self.deck.keys())            
         
     def __str__(self):
         return f"{'Chance' if self.type == 'chance' else 'Community Chest'} deck. Cards left: {len(self.order)}"
@@ -112,7 +120,7 @@ class Movement:
                 ending = 'n'
             if not player.inJail:
                 advprint(f"{self.p.name} rolled a{ending} {self.new}")
-                sleep(0.5)
+                #sleep(0.5)
             self.new = (self.new + self.p.loc) % 40
             #advprint(self.p.loc)
         else:
@@ -132,7 +140,7 @@ class Movement:
         """
         if old_space > new_space and new_space - old_space != -3:
             advprint('You passed Go!') 
-            sleep(0.5)
+            ##sleep(0.5)
             self.p += 200
 
     def move(self):
@@ -147,7 +155,7 @@ class Movement:
         self.p.loc = self.new
         #self.p.loc %= 40
         advprint(f"{self.p.name} landed on {self.nspace}!")
-        sleep(0.5)
+        ##sleep(0.5)
         
 class Auction:
     """ An auction.
@@ -197,7 +205,7 @@ class Auction:
             return x.text
         if b <= self.cbid:
             advprint("You must bid higher than the current max bid")
-            sleep(0.5)
+            #sleep(0.5)
         else:
             self.cp = player
             self.cbid = b
@@ -218,7 +226,7 @@ class Auction:
                         self.done.add(p)
                     else:
                         advprint('bad input')
-                        sleep(0.5)
+                        #sleep(0.5)
                     continue
     
     def auc(self):
@@ -231,13 +239,14 @@ class Auction:
             int: if a player placed a valid bid, returns 1
         """
         advprint('Starting auction')
-        sleep(0.5)
+        #sleep(0.5)
         while len(self.p) - len(self.done) > 1:
             self.turn()
         if self.cp and self.cbid:
             advprint(f"{self.prop} is sold to {self.cp} for {self.cbid}")
-            sleep(0.5)
+            #sleep(0.5)
             return 1
         else:
             advprint("No one gets it")  
-            sleep(0.5)
+            #sleep(0.5)
+
