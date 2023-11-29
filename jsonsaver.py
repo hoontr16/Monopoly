@@ -5,6 +5,7 @@ from monopoly_boardstate import BoardState
 from monopoly_cards_exp import chance, community_chest as cc
 from copy import copy
 import re
+from monopoly_basic_exp import advprint
 
 class PlayerEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -32,7 +33,7 @@ class BoardStateEncoder(json.JSONEncoder):
                     'cc': repr(obj.cc), 'lost players': obj.plost, 'time saved': obj.time}}
         return json.JSONEncoder.default(self, obj)
 
-def save(state, path='backup.json'):
+def save(state, path='backup'):
     newstate = copy(state)
     jsonplayers = [json.dumps(p, indent=2, cls=PlayerEncoder) for p in newstate.players]
     #for p in newstate.players:
@@ -49,7 +50,7 @@ def save(state, path='backup.json'):
     newstate.board = jsonboard
     newstate.plost = jlost
     #my_save = json.dumps(state, cls=BoardStateEncoder, indent=2)
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(f"{path}.json", 'w', encoding='utf-8') as f:
         json.dump(newstate, f, indent=2, cls=BoardStateEncoder)
         
 class LoadError(Exception):
@@ -74,9 +75,9 @@ class SaveState:
         #self.b = self.state['board']
 
     def verify_property(self, prop):
-        print(f"verifying {prop['name']}")
+        advprint(f"verifying {prop['name']}")
         c = 0
-        for space in board_spaces:
+        for space in board_spaces.values():
             if isinstance(space, Property) and space.name == prop['name']:
                 try:
                     prop['pcount'] = int(prop['pcount'])
@@ -84,7 +85,7 @@ class SaveState:
                     raise LoadError("Bad pcount")
                 if prop['pcount'] < 0 or prop['pcount'] > space.stot:
                     raise LoadError("Bad pcount")
-                if (isinstance(space, Railroad) or isinstance(space, Utility)) and prop['bnum'] != '0':
+                if (isinstance(space, Railroad) or isinstance(space, Utility)) and prop['bnum'] != 0:
                     raise LoadError("Bad bnum")
                 c += 1
                 break
@@ -99,13 +100,18 @@ class SaveState:
         c = 0
         if prop['owner'] != 'None':
             if prop['pcount'] <= 0:
+                #print('boo')
                 raise LoadError('Bad pcount')
             for p in self.p:
-                if prop['owner'].split()[1] == p.name:
+                if prop['owner'].split()[1] == p['name']:
+                    #print('yay')
                     c += 1
                     break
         elif prop['pcount'] != 0:
+            #print('boo')
             raise LoadError("Bad pcount")
+        else:
+            c += 1
         if not c:
             raise LoadError("Bad owner")
         
@@ -124,7 +130,7 @@ class SaveState:
     def verify_players(self):
         turns = []
         for p in self.p:
-            print(f"Verifying {p['name']}")
+            advprint(f"Verifying {p['name']}")
             if p['name'] in protected_words and protected_words.index(p['name']) > 14:
                 raise LoadError("Bad name")
             try:
@@ -154,7 +160,8 @@ class SaveState:
                 raise LoadError("Bad cc")
             if p['cc'] not in (0, 1):
                 raise LoadError("Bad cc")
-            if p['in Jail'] not in ('true', 'false'):
+            if p['in Jail'] not in (True, False):
+                print(p['in Jail'])
                 raise LoadError("Bad Jail bool")
             try:
                 p['jail turns'] = int(p['jail turns'])
@@ -163,19 +170,33 @@ class SaveState:
             if (p['in Jail'] == 'true' and p['jail turns'] not in range(3)) or (
                 p['in Jail'] == 'false' and p['jail turns'] != 0):
                 raise LoadError("Bad jail turns")
-            props = [repr(i) for i in board_spaces]
+            props = [repr(i) for i in board_spaces.values()]
             for s in p['deeds']:
                 for prop in p['deeds'][s]:
                     if prop not in props:
+                        print(prop)
+                        print(props)
                         raise LoadError('Bad deeds')
         turns.sort()
         if turns != list(range(len(self.p))):
             raise LoadError('Bad turn orders')
         
+    def extract_cards(self, str):
+        rdeck = r"(\{[^\{\}]+\})"
+        s = re.search(rdeck, str)[1]
+        rcards = r"(\d+):(\s(.+?)(,\s\D.+?)*),\s"
+        r = re.finditer(rcards, s)
+        mydeck = {}
+        for i in r:
+            try:
+                mydeck[int(i[1])] = (i[3] + i[4]).strip("'").strip('"').replace("\\", "")
+            except TypeError:
+                mydeck[int(i[1])] = i[3].strip("'").strip('"').replace("\\", "")
+        return mydeck
+    
     def verify_deck(self, deck, mytype):
-        rdeck = "(\{[^\{\}]+\})"
-        s = re.search(rdeck, deck)[1]
-        mydeck = dict(s)
+        mydeck = self.extract_cards(deck)
+        #print(mydeck)
         mykeys = set(mydeck.keys())
         myvals = set(mydeck.values())
         if mytype == 'chance':
@@ -187,6 +208,8 @@ class SaveState:
         else:
             raise LoadError('bad deck type')
         if not mykeys <= basekeys or not myvals <= basevals:
+            print(myvals)
+            print(basevals)
             raise LoadError('bad deck')
     
     def verify_state(self):
@@ -196,7 +219,7 @@ class SaveState:
             raise LoadError('bad turn total')
         try:
             self.verify_deck(self.state['chance'], 'chance')
-            self.verify_deck(self.deck['cc'], 'cc')
+            self.verify_deck(self.state['cc'], 'cc')
         except LoadError as e:
             raise e
     
@@ -225,12 +248,16 @@ class SaveState:
         for s in self.b:
             space = self.b[s]
             if isinstance(space, dict):
-                for i in board_spaces.values:
-                    if i.name == space['name']:
+                for i in board_spaces.values():
+                    if isinstance(i, Property):
+                        a = i.name
+                    else:
+                        a = i
+                    if a == space['name']:
                         myspace = i
                         myspace.bnum = space['bnum']
                         myspace.pcount = space['pcount']
-                        if space['owner'] == None:
+                        if space['owner'] == 'None':
                             own = None
                         else:
                             for p in loadplayers:
@@ -240,11 +267,13 @@ class SaveState:
                                     break
                         myspace.owner = own
         loadstate = BoardState(pdef=loadplayers)
-        loadstate.turn = self.state['turn order']
+        loadstate.turn = self.state['turn']
         loadstate.board = board_spaces
         loadstate.turntotal = self.state['turn total']
-        mychance = dict(self.state['chance'].split('with cards ')[1].strip('>'))
-        mycc = dict(self.state['cc'].split('with cards ')[1].strip('>'))
+        #mychance = dict(self.state['chance'].split('with cards ')[1].strip('>'))
+        mychance = self.extract_cards(self.state['chance'])
+        #mycc = dict(self.state['cc'].split('with cards ')[1].strip('>'))
+        mycc = self.extract_cards(self.state['cc'])
         loadstate.chance = mychance
         loadstate.cc = mycc
         for l in self.l:

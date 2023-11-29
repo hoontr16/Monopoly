@@ -1,10 +1,29 @@
 from monopoly_command import Command
 from monopoly_boardstate import BoardState
 from monopoly_basic_exp import advprint
-from jsonsaver import save
+from jsonsaver import save, SaveState, LoadError
                             
 def main(pdef=[]):
-    current_state = BoardState(pdef)
+    mychoice = input("Start a new game, or load an existing save? ").lower()
+    t = mychoice.split(maxsplit=1)
+    try:
+        if t[0] == 'load':
+            print("loading")
+            while True:
+                try:
+                    current_state = load_file(t[1])
+                except (FileNotFoundError, LoadError) as e:
+                    advprint(e)
+                    mychoice = input("Start a new game, or load an existing save?").lower()
+                    t = mychoice.split(maxsplit=1)   
+                    if t[0] != 'load':
+                        current_state = BoardState(pdef)
+                break
+        else:
+            current_state = BoardState(pdef)
+    except IndexError:
+        advprint("exiting")
+        return
     #current_state.players = [Player('hoontr', 0, current_state, location=10, deeds={'Brown': [], 'Light Blue': [], 'Pink': [], 'Orange': [], 'Red': [], 'Yellow': [], 'Green': [], 'Dark Blue': [], 'Railroads': [], 'Utilities': []}), Player('ariadne', 1, current_state)]
     #current_state.players[0].inJail = True
     while True:
@@ -17,24 +36,41 @@ def main(pdef=[]):
             a = 'loop'
             while a not in (None, 'exit'):
                 command = Command(current_state, 'turn', f'\nWhat would {current_state.cp.name} like to do? note: only [roll, jail, build, info, trade, exit, debug, save, load, unmortgage] are currently implemented ')
+                t = command.text.split(maxsplit=1)
+                if t[0] == 'save':
+                    advprint(f"saving to {t[1]}.json")
+                    save(current_state, t[1])
+                    continue
+                elif t[0] == 'load':
+                    break
                 try:
                     a = command.action()
-                except (ValueError, TypeError, FileNotFoundError) as e:
+                except (ValueError, TypeError) as e:
                     advprint(e)
                     #command = Command(current_state, 'turn', f'\nWhat would {current_state.cp.name} like to do? note: only [roll, jail, build, exit, debug] are currently implemented ')
                     #a = 'loop'
                     continue
             if a == 'exit':
                 break
-        if command.text == 'load':
-            current_state = a
+        if t[0] == 'load':
+            try:
+                current_state = load_file(t[1])
+            except FileNotFoundError as e:
+                advprint(e)
             continue
         current_state.turntotal += 1
         current_state.turn += 1
         current_state.turn %= len(current_state.players)
         #print(current_state.turn)
         
-        
+def load_file(path):
+    try:
+        cs = SaveState(path)
+        lstate = cs.load()
+        advprint('load successful')
+        return lstate
+    except FileNotFoundError as e:
+        raise e
         
         
 if __name__ == '__main__':
