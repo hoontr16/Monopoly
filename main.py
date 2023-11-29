@@ -4,6 +4,14 @@ from monopoly_basic_exp import advprint
 from jsonsaver import save, SaveState, LoadError
                             
 def main(pdef=[]):
+    """ Runs the actual game.
+    
+    Arguments:
+        pdef(list, defaults to empty): an optional predefined list of players.
+        
+    Side effects:
+        calls functions, prints messages, and asks for player input
+    """
     mychoice = input("Start a new game, or load an existing save? ").lower()
     t = mychoice.split(maxsplit=1)
     try:
@@ -64,6 +72,20 @@ def main(pdef=[]):
         #print(current_state.turn)
         
 def load_file(path):
+    """ Return the GameState object from loading a save.
+    
+    Arguments:
+        path(str): the path to the file to load from. include file designator
+    
+    Side effects:
+        prints a message if successful
+        
+    Raises:
+        FileNotFoundError if raised by load() method
+    
+    Returns:
+        GameState: the loaded save state
+    """
     try:
         cs = SaveState(path)
         lstate = cs.load()
