@@ -1,6 +1,6 @@
 # Monopoly
-My implementation of Monopoly in Python, without using Pygame
-
+My implementation of Monopoly in Python, without using Pygame\n
+\n
 When in the directory, run main.py with no arguments to play.
 
 Guide to commands:
