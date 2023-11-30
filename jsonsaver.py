@@ -333,7 +333,7 @@ class SaveState:
         loadplayers = []
         for p in self.p:
             myp = Player(p['name'], p['turn order'], p['state'], p['location'], p['chance'], p['cc'], p['wallet'])
-            myp.inJail = True if p['in Jail'] == 'true' else False
+            myp.inJail = p['in Jail']
             myp.jailTurn = p['jail turns']
             for s in myp.deeds:
                 myp.deeds[s].clear()

@@ -3,7 +3,7 @@ from monopoly_property import board_spaces
 from monopoly_classes_exp import Auction, Deck, Movement
 from monopoly_exceptions import LoserError
 from monopoly_command import Command
-from monopoly_basic_exp import advprint
+from monopoly_basic_exp import advprint, roll_dice
 from time import time, localtime, asctime
 
 class BoardState:    
@@ -108,6 +108,51 @@ class BoardState:
         #advprint(f"{some_player.name}'s wallet balance: ${some_player.wallet}") 
         #some_property.owner = some_player  
     
+    def p_jail_reset(self, method):
+        """ Processes the different methods of escaping Jail.
+            
+            Args:
+                method (str): how the player is escaping Jail. should be
+                    one of: time, pay, roll, card
+                    
+            Side effects:
+                subtracts the fine or GOJF card from the player, if applicable
+                sets player's Jail attributes back to the default
+                    
+            Returns:
+                list: if the player rolled to escape, returns their roll,
+                but without the doubles
+        """
+        if method == 'roll':
+            c = roll_dice()
+            if c[1] == 'doubles':
+                advprint('You rolled doubles and escaped!')
+                c[1] = 'nope'
+                self.cp.inJail = False
+                self.cp.jailTurn = 0
+                return c
+            else:
+                advprint("You failed to escape")
+                return
+        elif method == 'time' or method == 'pay':
+            try:
+                self.cp.wallet -= 50
+            except:
+                return 
+        elif method == 'chance':
+            self.cp.chance -= 1
+        elif method == 'cc':
+            self.cp.cc -= 1
+        else:
+            raise ValueError("Invalid escape method")
+        if method == 'pay':
+            advprint("You pay $50 and leave Jail")
+        elif method in ('chance', 'cc'):
+            advprint("You use a GOJF card and leave Jail")
+        self.cp.inJail = False
+        self.cp.jailTurn = 0
+        return False
+
     def in_jail(self):
         """ Handles the logic for entering Jail, spending turns in Jail, and leaving.
             
@@ -125,75 +170,13 @@ class BoardState:
         if self.cp.inJail:
             self.cp.jailTurn += 1
             
-            def p_jail_reset(method):
-                """ Processes the different methods of escaping Jail.
-                    
-                    Args:
-                        method (str): how the player is escaping Jail. should be
-                            one of: time, pay, roll, card
-                            
-                    Side effects:
-                        subtracts the fine or GOJF card from the player, if applicable
-                        sets player's Jail attributes back to the default
-                            
-                    Returns:
-                        list: if the player rolled to escape, returns their roll,
-                        but without the doubles
-                """
-                if method == 'time' or method == 'pay':
-                    try:
-                        self.cp.wallet -= 50
-                    except:
-                        return 
-                elif method == 'roll':
-                    advprint('You rolled doubles and escaped!')
-                    c[1] = 'nope'
-                    self.cp.inJail = False
-                    self.cp.jailTurn = 0
-                    return c
-                else:
-                    if self.cp.chance:
-                        self.cp.chance -= 1
-                    elif self.cp.cc:
-                        self.cp.cc -= 1
-                    else:
-                        raise ValueError("You don't have any cards!")
-                self.cp.inJail = False
-                self.cp.jailTurn = 0
-            
             if self.cp.jailTurn == 3:
                 advprint("You've served your time. You pay $50 and leave Jail.")
-                p_jail_reset('time')
+                self.p_jail_reset('time')
                 return False
             else:
-                while True:
-                    pchoice = Command(self, 'jail', "You're in Jail. Would you like to roll, use a GOJF card, or pay the fine?\n")
-                    while True:
-                        try:
-                            c = pchoice.action()
-                            break
-                        except:
-                            advprint("Please enter either 'roll', 'card', or 'pay'")
-                            pchoice = Command(self, 'jail', "You're in Jail. Would you like to roll, use a GOJF card, or pay the fine?\n")
-                            continue
-                    if pchoice.text == 'roll':
-                        if c[1] == 'doubles':
-                            advprint(c)
-                            p_jail_reset('roll')
-                            return c
-                        else:
-                            advprint('No doubles this time')
-                            return 
-                    elif pchoice == 'card':
-                        if self.cp.chance == 0 or self.cp.cc == 0:
-                            advprint("You don't have any GOJF cards!")
-                        else:
-                            p_jail_reset('card')
-                            return False
-                    else:
-                        p_jail_reset('pay')
-                        advprint("You pay the $50 fine and leave Jail.")
-                        return False
+                a = self.cp.jail_turn()
+                return self.p_jail_reset(a)
         else:
             advprint(f"{self.cp.name} is going to Jail!")
             self.cp.loc = 10

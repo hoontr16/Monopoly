@@ -2,6 +2,7 @@ from monopoly_exceptions import LoserError
 from monopoly_property import Property
 from random import shuffle
 from monopoly_basic_exp import advprint
+from monopoly_command import Command
 
 class Player:
     """ An object for a Player's current state.
@@ -151,6 +152,30 @@ class Player:
         else:
             raise TypeError(f"Property objects do not support multiplication with objects of type {type(setname)}")
         
+    def jail_turn(self):
+        while True:
+            pchoice = Command(self.game, 'jail', "You're in Jail. Would you like to roll, use a GOJF card, or pay the fine?\n")
+            while pchoice.text not in ('roll', 'card', 'pay'):
+                advprint("Please enter either 'roll', 'card', or 'pay'")
+                pchoice = Command(self.game, 'jail', "You're in Jail. Would you like to roll, use a GOJF card, or pay the fine?\n")
+                continue
+            if pchoice.text == 'roll':
+                return 'roll'
+            elif pchoice == 'card':
+                if self.chance:
+                    return 'chance'
+                elif self.cc:
+                    return 'cc'
+                else:
+                    advprint(f"{self} does not have an GOJF cards")
+                    continue
+            else:
+                advprint("You pay the $50 fine and leave Jail.")
+                return 'pay'
+
+
+
+
 def make_players(state):
     """ Makes player objects for however many players there are, and determines
     turn order.
