@@ -217,8 +217,7 @@ class BoardState:
         cprop = my_move.nspace
         if not isinstance(cprop, str):
             if not cprop.owner:
-                a = Command(self, 'choice', "Would you like to buy it?\n")
-                a1 = a.action()
+                a1 = self.cp.buy_choice(cprop)
                 if a1:
                     self.buy_property(self.cp, cprop)
                 else:
@@ -239,74 +238,7 @@ class BoardState:
         else:
             self.special_space(cprop)
         return my_move
-
-    def raise_money(self, p, other_p, debt):
-        """ Handle the liquidation of player assets. 
-        
-        Arguments:
-            p (Player): the player who's raising money
-            other_p (Player, str): the entity owed. either another player or the Bank
-            debt (int): how much money p owes.
-        
-        Side effects:
-            asks for player input on what to sell/mortgage
-            prints error messages if applicable
-            calls functions, or adds money to p's wallet after a sell/mortgage
-            
-        Returns:
-            None: if p has no more assets to liquidate and cannot pay their debt
-            Int: otherwise, returns debt
-        """
-        advprint(f"{p} owes {other_p} ${debt}")
-        def check_options(p):
-            """ Display the player's assets.
-            
-            Arguments:
-                p (Player): the player raising money.
-                
-            Side effects:
-                prints p's available assets and their sell/mortgage price
-            """
-            advprint('Here are your assets:')
-            advprint()
-            advprint(f"Your current balance: ${p.wallet}")
-            for s in p.deeds:
-                for prop in s:
-                    if prop.bnum:
-                        advprint(f"{prop} : {'hotel' if prop.bnum == 5 else f'{prop.bnum} houses'}, sell price: ${prop.bprice // 2}")
-                    else:
-                        advprint(f"{prop} : {'Mortgaged' if prop.mstatus else f'Unmortgaged, mortgage price: ${prop.mprice}'}")
-        while p.wallet < debt:
-            if p.check_lost(debt):
-                advprint("You lose!")
-                return
-            check_options(p)
-            c = Command(self, 'poor', "What would you like to do?\n")
-            ctype, pname = c.action()
-            if ctype not in ('mortgage', 'sell'):
-                advprint("Please enter either 'mortgage' or 'sell', followed by the property you choose")
-                continue
-            cprop = self.find_prop(pname)
-            if cprop == None:
-                continue
-            if ctype == 'mortgage':
-                cprop.mortgage()
-            else:
-                n = 0
-                for i in p.deeds[cprop.set]:
-                    if i.bnum > cprop.bnum:
-                        if i.bnum == 5:
-                            advprint(f'Houses must be sold evenly across a set. {i} has a hotel, while {cprop} has {cprop.bnum} houses')
-                        else:
-                            advprint(f'Houses must be sold evenly across a set. {i} has {i.bnum} houses, while {cprop} has {cprop.bnum}')
-                        n += 1
-                if not n:
-                    try:
-                        p += cprop.sell_house()
-                    except:
-                        continue
-        return debt
-                
+               
     def do_chance(self):
         """ Carries out the effect for each chance card.
             
@@ -496,58 +428,6 @@ class BoardState:
                         self.chance.refresh()
         except LoserError:
             return
-    
-    def get_mortgaged_prop(self, playr, prop):
-        if not prop.mstatus:
-            raise ValueError("This property is not mortgaged")
-        prop.owner = playr
-        c = Command(self, 'rich', f"{playr.name}, would you like to unmortgage {prop}, or pay 10% interest? Enter either 'unmortgage' or 'interest': ")
-        while True:
-            try:
-                c1 = c.action()
-                break
-            except:
-                advprint("Please enter either 'unmortgage' or 'interest'")
-                c = Command(self, 'rich', f"{playr.name}, would you like to unmortgage {prop}, or pay 10% interest? Enter either 'unmortgage' or 'interest': ")
-        if c1:
-            mstat = prop.unmortgage()
-            if not mstat:
-                choice = ''
-                while choice.text not in ('y', 'n'):
-                    choice = Command(self, 'choice', 'Would you like to raise money for this? y or n ')
-                choice = choice.action()
-                if choice:
-                    self.raise_money(playr, 'the Bank', prop.mprice)
-                    prop.unmortgage()
-                elif playr.wallet < prop.mprice // 10:
-                    choice = ''
-                    while choice.text not in ('y', 'n'):
-                        choice = Command(self, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ")
-                    if choice.action():
-                        advprint(f'You pay the ${prop.mprice // 10} interest')
-                        playr -= prop.mprice // 10
-                    else:
-                        prop.owner = None
-                        return False
-                else:
-                    advprint(f'You pay ${prop.mprice // 10} in interest instead')
-                    playr -= prop.mprice // 10
-                    return True
-            else:
-                return True
-        elif playr.wallet < prop.mprice // 10:
-            choice = ''
-            while choice not in ('y', 'n'):
-                choice = Command(self, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ").text
-            if choice.action():
-                advprint(f'You pay the ${prop.mprice // 10} interest')
-                playr -= prop.mprice // 10
-            else:
-                prop.owner = None
-                return False
-        else:
-            playr -= prop.mprice // 10
-        return True
             
     
     def lose(self, loser, creditor):
@@ -580,7 +460,7 @@ class BoardState:
             try:
                 for aset in loser.deeds:
                     for p in loser.deeds[aset]:
-                        a = self.get_mortgaged_prop(creditor, p)
+                        a = creditor.get_mortgaged_prop( p)
                         if a:
                             creditor += p
                     loser.deeds[aset].clear()

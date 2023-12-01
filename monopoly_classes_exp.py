@@ -184,7 +184,7 @@ class Auction:
         self.cp = None
         self.state = state
     
-    def bid(self, player):
+    def abid(self, player):
         """ Processes a bid during an auction.
         
         Arguments:
@@ -198,11 +198,9 @@ class Auction:
         Returns:
             str: if the player doesn't input a number, returns their input
         """
-        x = Command(self.state, 'money', f"{player.name}, what is your bid? Current bid: ${self.cbid}\n")
-        try:
-            b = x.action()
-        except ValueError:
-            return x.text
+        b = player.bid(self)
+        if isinstance(b, str):
+            return b
         if b <= self.cbid:
             advprint("You must bid higher than the current max bid")
             #sleep(0.5)
@@ -220,7 +218,7 @@ class Auction:
         """
         for p in self.p:
             if p not in self.done and p != self.cp:
-                mybid = self.bid(p)
+                mybid = self.abid(p)
                 if mybid:
                     if mybid in ('exit', 'stop'):
                         self.done.add(p)

@@ -46,8 +46,11 @@ def main(pdef=[]):
                 command = Command(current_state, 'turn', f'\nWhat would {current_state.cp.name} like to do? note: only [roll, jail, build, info, trade, exit, debug, save, load, unmortgage] are currently implemented ')
                 t = command.text.split(maxsplit=1)
                 if t[0] == 'save':
-                    advprint(f"saving to {t[1]}.json")
-                    save(current_state, t[1])
+                    try:
+                        advprint(f"saving to {t[1]}.json")
+                        save(current_state, t[1])
+                    except IndexError:
+                        advprint("Please enter the word 'save' followed by the file name to save to")
                     continue
                 elif t[0] == 'load':
                     break

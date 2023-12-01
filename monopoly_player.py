@@ -118,6 +118,8 @@ class Player:
             self.deeds[other.set].append(other)
             other.owner = self
             return self
+        else:
+            raise TypeError(f"Invalid type: {type(other)}")
             
     def __sub__(self, other):
         #t = type(other)
@@ -130,7 +132,7 @@ class Player:
         #t = type(other)
         if isinstance(other, int):
             if self - other < 0:
-                a = self.game.raise_money(self, self.creditor, other)
+                a = self.raise_money(self.creditor, other)
                 if not a:
                     self.game.lose(self, self.creditor)
                     raise LoserError()
@@ -143,6 +145,8 @@ class Player:
         elif isinstance(other, Property):
             self.deeds[other.set].remove(other)
             return self
+        else:
+            raise TypeError(f"Invalid type: {type(other)}")
             
     def __mul__(self, setname):
         if isinstance(setname, str):
@@ -172,9 +176,136 @@ class Player:
             else:
                 advprint("You pay the $50 fine and leave Jail.")
                 return 'pay'
+    
+    def bid(self, auc):
+        x = Command(auc.state, 'money', f"{self.name}, what is your bid? Current bid: ${auc.cbid}\n")
+        try:
+            return x.action()
+        except ValueError:
+            return x.text
+        
+    def buy_choice(self, prop):
+        a = Command(self, 'choice', "Would you like to buy it?\n")
+        return a.action()
 
+    def raise_money(self, other_p, debt):
+        """ Handle the liquidation of player assets. 
+        
+        Arguments:
+            p (Player): the player who's raising money
+            other_p (Player, str): the entity owed. either another player or the Bank
+            debt (int): how much money p owes.
+        
+        Side effects:
+            asks for player input on what to sell/mortgage
+            prints error messages if applicable
+            calls functions, or adds money to p's wallet after a sell/mortgage
+            
+        Returns:
+            None: if p has no more assets to liquidate and cannot pay their debt
+            Int: otherwise, returns debt
+        """
+        advprint(f"{self} owes {other_p} ${debt}")
+        def check_options():
+            """ Display the player's assets.
+            
+            Arguments:
+                p (Player): the player raising money.
+                
+            Side effects:
+                prints p's available assets and their sell/mortgage price
+            """
+            advprint('Here are your assets:')
+            advprint()
+            advprint(f"Your current balance: ${self.wallet}")
+            for s in self.deeds:
+                for prop in s:
+                    if prop.bnum:
+                        advprint(f"{prop} : {'hotel' if prop.bnum == 5 else f'{prop.bnum} houses'}, sell price: ${prop.bprice // 2}")
+                    else:
+                        advprint(f"{prop} : {'Mortgaged' if prop.mstatus else f'Unmortgaged, mortgage price: ${prop.mprice}'}")
+        while self.wallet < debt:
+            if self.check_lost(debt):
+                advprint("You lose!")
+                return
+            check_options()
+            c = Command(self.game, 'poor', "What would you like to do?\n")
+            ctype, pname = c.action()
+            if ctype not in ('mortgage', 'sell'):
+                advprint("Please enter either 'mortgage' or 'sell', followed by the property you choose")
+                continue
+            cprop = self.game.find_prop(pname)
+            if cprop == None:
+                continue
+            if ctype == 'mortgage':
+                cprop.mortgage()
+            else:
+                n = 0
+                for i in self.deeds[cprop.set]:
+                    if i.bnum > cprop.bnum:
+                        if i.bnum == 5:
+                            advprint(f'Houses must be sold evenly across a set. {i} has a hotel, while {cprop} has {cprop.bnum} houses')
+                        else:
+                            advprint(f'Houses must be sold evenly across a set. {i} has {i.bnum} houses, while {cprop} has {cprop.bnum}')
+                        n += 1
+                if not n:
+                    try:
+                        self += cprop.sell_house()
+                    except:
+                        continue
+        return debt
 
-
+    def get_mortgaged_prop(self, prop):
+        if not prop.mstatus:
+            raise ValueError("This property is not mortgaged")
+        prop.owner = self
+        c = Command(self.game, 'rich', f"{self.name}, would you like to unmortgage {prop}, or pay 10% interest? Enter either 'unmortgage' or 'interest': ")
+        while True:
+            try:
+                c1 = c.action()
+                break
+            except:
+                advprint("Please enter either 'unmortgage' or 'interest'")
+                c = Command(self.game, 'rich', f"{self.name}, would you like to unmortgage {prop}, or pay 10% interest? Enter either 'unmortgage' or 'interest': ")
+        if c1:
+            mstat = prop.unmortgage()
+            if not mstat:
+                choice = ''
+                while choice.text not in ('y', 'n'):
+                    choice = Command(self.game, 'choice', 'Would you like to raise money for this? y or n ')
+                choice = choice.action()
+                if choice:
+                    self.raise_money('the Bank', prop.mprice)
+                    prop.unmortgage()
+                elif self.wallet < prop.mprice // 10:
+                    choice = ''
+                    while choice.text not in ('y', 'n'):
+                        choice = Command(self.game, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ")
+                    if choice.action():
+                        advprint(f'You pay the ${prop.mprice // 10} interest')
+                        self -= prop.mprice // 10
+                    else:
+                        prop.owner = None
+                        return False
+                else:
+                    advprint(f'You pay ${prop.mprice // 10} in interest instead')
+                    self -= prop.mprice // 10
+                    return True
+            else:
+                return True
+        elif self.wallet < prop.mprice // 10:
+            choice = ''
+            while choice not in ('y', 'n'):
+                choice = Command(self.game, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ").text
+            if choice.action():
+                advprint(f'You pay the ${prop.mprice // 10} interest')
+                self -= prop.mprice // 10
+            else:
+                prop.owner = None
+                return False
+        else:
+            self -= prop.mprice // 10
+        return True
 
 def make_players(state):
     """ Makes player objects for however many players there are, and determines
