@@ -21,6 +21,8 @@ class Property:
             is called
         pcount (int): how many properties in its set the property's current owner
             owns.
+        iprice (int): how much a player pays in interest when recieving this
+            property mortgaged.
     """
     def __init__(self, name:str, my_set:str, set_total:int, price:int, mortgage_price:int, \
                  rent_prices:list, building_price:int, building_num:int=0, \
@@ -59,6 +61,7 @@ class Property:
         self.owner = None
         self.extra = False
         self.pcount = 0
+        self.iprice = self.mprice // 10
     
     def get_rent(self):
         """ Determines how much to charge for rent.

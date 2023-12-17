@@ -41,10 +41,9 @@ def main(pdef=[]):
             if len(current_state.players) - len(current_state.plost) == 1:
                 advprint(f'{current_state.cp} wins!')
                 break
-            a = 'loop'
-            while a not in (None, 'exit'):
-                command = Command(current_state, 'turn', f'\nWhat would {current_state.cp.name} like to do? note: only [roll, jail, build, info, trade, exit, debug, save, load, unmortgage] are currently implemented ')
-                t = command.text.split(maxsplit=1)
+            t = 'loop'
+            while t not in (None, 'exit'):
+                t = current_state.cp.turn()
                 if t[0] == 'save':
                     try:
                         advprint(f"saving to {t[1]}.json")
@@ -54,14 +53,7 @@ def main(pdef=[]):
                     continue
                 elif t[0] == 'load':
                     break
-                try:
-                    a = command.action()
-                except (ValueError, TypeError) as e:
-                    advprint(e)
-                    #command = Command(current_state, 'turn', f'\nWhat would {current_state.cp.name} like to do? note: only [roll, jail, build, exit, debug] are currently implemented ')
-                    #a = 'loop'
-                    continue
-            if a == 'exit':
+            if t[0] == 'exit':
                 break
         if t[0] == 'load':
             try:
@@ -96,7 +88,6 @@ def load_file(path):
         return lstate
     except FileNotFoundError as e:
         raise e
-        
         
 if __name__ == '__main__':
     #pdef = [Player('hoontr', 0, location=10, deeds={'Brown': [], 'Light Blue': [], 'Pink': [], 'Orange': [], 'Red': [], 'Yellow': [], 'Green': [], 'Dark Blue': [], 'Railroads': [], 'Utilities': []}), Player('ariadne', 1)]

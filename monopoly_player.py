@@ -1,8 +1,9 @@
 from monopoly_exceptions import LoserError
 from monopoly_property import Property
-from random import shuffle
+from random import shuffle, randrange, choice
 from monopoly_basic_exp import advprint
 from monopoly_command import Command
+from argparse import ArgumentParser
 
 class Player:
     """ An object for a Player's current state.
@@ -20,7 +21,7 @@ class Player:
         dcount (int): how many doubles the player has rolled in a row. defaults to 0, should be an int from 0-3
         game (GameState): the current game object
     """
-    def __init__(self, name, turn_order, gamestate, location=0, chance=0, cc=0, wallet=1500, deeds = {}):
+    def __init__(self, gamestate, name=None, turn_order=0, location=0, chance=0, cc=0, wallet=1500, deeds = {}, pnum=0):
         """ Initialize a Player object.
         
         Arguments:
@@ -36,7 +37,6 @@ class Player:
         Side effects:
             sets the Player's attributes.
         """
-        self.name = name
         self.turn = turn_order
         self.loc = location
         self.wallet = wallet
@@ -68,6 +68,11 @@ class Player:
             return setcount
         else:
             return len(self.deeds[setname])
+        
+    def check_full(self, prop):
+        if self.count_set(setname=prop.set) == prop.stot:
+            return True
+        return False
     
     def __repr__(self):
         """ How to represent a Player object.
@@ -100,11 +105,9 @@ class Player:
         #t = type(other)
         if isinstance(other, int):
             return self.wallet + other
-        else:
-            raise TypeError(f'Addition is not supported between instances of Player and {type(other)}')
+        raise TypeError(f'Addition is not supported between instances of Player and {type(other)}')
         
     def __iadd__(self, other):
-        #t = type(other)
         if isinstance(other, int):
             self.wallet += other
             advprint(f"{self.name}'s current balance: ${self.wallet}")
@@ -125,11 +128,9 @@ class Player:
         #t = type(other)
         if isinstance(other, int):
             return self.wallet - other
-        else:
-            raise TypeError(f'Subtraction is not supported between instances of Player and {type(other)}')
+        raise TypeError(f'Subtraction is not supported between instances of Player and {type(other)}')
         
     def __isub__(self, other):
-        #t = type(other)
         if isinstance(other, int):
             if self - other < 0:
                 a = self.raise_money(self.creditor, other)
@@ -153,9 +154,76 @@ class Player:
             for i in self.deeds[setname]:
                 i.pcount = len(self.deeds[setname])        
             return self
+        raise TypeError(f"Property objects do not support multiplication with objects of type {type(setname)}")
+    
+    def count_props(self):
+        ans = 0
+        for i in self.deeds:
+            ans += len(self.deeds[i])
+        return ans
+    
+    def process_trade(self, other, gain, loss):
+        try:
+            other -= gain['money']
+            self += gain['money']
+            self -= loss['money']
+            other += loss['money']
+        except LoserError:
+            return
+        if gain['cards']:
+            if gain['cards'] == 2:
+                other.chance -= 1
+                other.cc -= 1
+                self.chance += 1
+                self.cc += 1
+            elif other.chance:
+                other.chance -= 1
+                self.chance += 1
+            elif other.cc:
+                other.cc -= 1
+                self.cc += 1
+            else:
+                advprint('oops!')
+        if loss['cards']:
+            if loss['cards'] == 2:
+                other.chance += 1
+                other.cc += 1
+                self.chance -= 1
+                self.cc -= 1
+            elif self.chance:
+                other.chance += 1
+                self.chance -= 1
+            elif self.cc:
+                other.cc += 1
+                self.cc -= 1
+            else:
+                advprint('oops!')
+        for prop in gain['properties']:
+            other -= prop
+            self += prop
+        for r in loss['properties']:
+            self -= r
+            other += r
+    
+class HumanPlayer(Player):
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+        self.type = 'human'
+        if not name:
+            while True:
+                try:
+                    p_input = input(f'Player {pnum}, enter your name: ')
+                    p_input = p_input.replace(' ', '_')
+                    if p_input.lower() in protected_words:
+                        advprint("Invald name")
+                        continue
+                    self.name = p_input
+                    break
+                except:
+                    advprint('Something went wrong! Please enter a valid string as your name')
         else:
-            raise TypeError(f"Property objects do not support multiplication with objects of type {type(setname)}")
-        
+            self.name = name
+            
     def jail_turn(self):
         while True:
             pchoice = Command(self.game, 'jail', "You're in Jail. Would you like to roll, use a GOJF card, or pay the fine?\n")
@@ -277,35 +345,387 @@ class Player:
                 if choice:
                     self.raise_money('the Bank', prop.mprice)
                     prop.unmortgage()
-                elif self.wallet < prop.mprice // 10:
+                elif self.wallet < prop.iprice:
                     choice = ''
                     while choice.text not in ('y', 'n'):
                         choice = Command(self.game, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ")
                     if choice.action():
-                        advprint(f'You pay the ${prop.mprice // 10} interest')
-                        self -= prop.mprice // 10
+                        advprint(f'You pay the ${prop.iprice} interest')
+                        self -= prop.iprice
                     else:
                         prop.owner = None
                         return False
                 else:
-                    advprint(f'You pay ${prop.mprice // 10} in interest instead')
-                    self -= prop.mprice // 10
+                    advprint(f'You pay ${prop.iprice} in interest instead')
+                    self -= prop.iprice
                     return True
             else:
                 return True
-        elif self.wallet < prop.mprice // 10:
+        elif self.wallet < prop.iprice:
             choice = ''
             while choice not in ('y', 'n'):
                 choice = Command(self.game, 'choice', "You don't have enough money to pay the interest. Would you like to raise money for this? y or n ").text
             if choice.action():
-                advprint(f'You pay the ${prop.mprice // 10} interest')
+                advprint(f'You pay the ${prop.iprice} interest')
                 self -= prop.mprice // 10
             else:
                 prop.owner = None
                 return False
         else:
-            self -= prop.mprice // 10
-        return True
+            self -= prop.iprice
+        return True    
+
+    def trade(self, other):
+        def parse_offer(offer):
+            props = []
+            cards = 0
+            money = 0
+            error = 0
+            for i in offer:
+                try:
+                    cards = int(i)
+                except ValueError:
+                    if i[0] == '$':
+                        money = int(i[1:])
+                    else:
+                        x = self.state.findprop(i)
+                        if x:
+                            props.append(x)
+                        else:
+                            advprint("There was an error entering your properties.")
+                            error += 1
+            return props, cards, money, error
+        request = input(f"What does {self} want to trade for?\n")
+        rlist = request.strip().split(', ')
+        while not rlist:
+            request = input('Please enter your request, like this: {property1, property2, ...}, ${money}, {GOJF card(s)}\n')
+            rlist = request.strip().split(', ')
+        rprops, rcards, rmoney, rerror = parse_offer(request)
+        for r in rprops:
+            if r not in other.deeds[r.set]:
+                advprint(f"{other} does not own {r}")
+                rerror += 1
+        if rerror:
+            return
+        offer = input(f"What does {self} offer?\n")
+        olist = offer.strip().split(', ')
+        while not olist:
+            offer = input('Please enter your offer, like this: {property1, property2, ...}, ${money}, {GOJF card(s)}\n')
+            olist = offer.strip().split(', ')
+        oprops, ocards, omoney, oerror = parse_offer(olist)
+        for o in oprops:
+            if o not in self.deeds[o.set]:
+                advprint(f"You do not own {o}")
+                oerror += 1
+        if oerror:
+            return         
+        rtotal = {'properties': rprops, 'money': rmoney, 'cards': rcards}
+        ototal = {'properties': oprops, 'money': omoney, 'cards': ocards}                
+        other.evaluate_offer(self, rtotal, ototal)
+
+    def evaluate_offer(self, other, request, offer):
+        advprint(f"Trade offer from {other}!")
+        advprint(f"{other}'s request:")
+        advprint(f"GOJF cards: {request['cards']}")
+        advprint(f"Money: ${request['money']}")
+        for prop in request['properties']:
+            advprint(prop)
+        print()
+        advprint(f"{other}'s offerings:")
+        advprint(f"GOJF cards: {offer['cards']}")
+        advprint(f"Money: ${offer['money']}")
+        for prop in offer['properties']:
+            advprint(prop)        
+        c = input("Do you accept this offer? Yes, no, or counter\n").lower()
+        while c not in ('yes', 'no', 'counter'):
+            c = input("Do you accept this offer? Yes, no, or counter\n").lower()
+        if c == 'yes':
+            self.process_trade(other, offer, request)
+        elif c == 'no':
+            print("Trade cancelled")
+        else:
+            self.trade(other)
+        
+    def turn(self):
+        command = Command(self.game, 'turn', f'\nWhat would {self} like to do? note: only [roll, jail, build, info, trade, exit, debug, save, load, unmortgage] are currently implemented ')
+        t = command.text.split(maxsplit=1)
+        if t[0] == 'save':
+            return t
+        elif t[0] == 'load':
+            return t
+        try:
+            return command.action()
+        except (ValueError, TypeError) as e:
+            advprint(e)
+    
+class ComputerPlayer(Player):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.mort_priority = ('Utilities', 'Brown', 'Dark Blue', 'Light Blue', 'Pink', 'Green', 'Railroads', 'Yellow', 'Orange', 'Red')
+        self.house_sell_priority = ('Brown', 'Light Blue', 'Yellow', 'Dark Blue', 'Green', 'Pink', 'Orange', 'Red')
+        self.build_priority = ('Red', 'Orange', 'Yellow', 'Pink', 'Light Blue', 'Dark Blue', 'Green', 'Brown')
+        self.name = f"Computer {pnum}"
+        self.type = 'ai'
+    
+    def jail_turn(self):
+        if self.chance:
+            return 'chance'
+        elif self.cc:
+            return 'cc'
+        elif (self.state.turntotal / len(self.state.players) < 5\
+            or sum(self.count_set().values()) < 5) and self.state.turntotal / len(self.state.players) < 15:
+            return 'pay'
+        else:
+            return 'roll'
+        
+    def calc_high_bid(self, prop):
+        bal_lim = int(self.wallet / 10)
+        setfactor = 1
+        minbaladjust = 200
+        if self.wallet < minbaladjust:
+            setfactor *= 0.75
+        if len(self.deeds[prop.set]):
+            setfactor *= 4/3
+        if len(self.deeds[prop.set]) + 1 == prop.stot:
+            setfactor *= 2
+        pricefactor = prop.price * setfactor
+        price_lim = min(self.wallet - 50, pricefactor)
+        maxbid = round(max(bal_lim, price_lim), ndigits=-1)
+        return randrange(maxbid - 30, maxbid + 40, step=10)
+
+    def bid(self, auc):
+        maxbid = self.calc_high_bid(auc.prop)
+        for i in range(10, maxbid + 1, 10):
+            if i > auc.cbid:
+                return i
+        return 'exit'
+    
+    def buy_choice(self, prop):
+        if prop.price < self.wallet - 50:
+            return True
+        return False
+    
+    def get_assets(self):
+        mlist = []
+        for s in self.mort_priority:
+            for p in self.deeds[s]:
+                mlist.append(p) if p.bnum == 0 else None
+        mlist.sort(key=lambda c: self.mort_priority.index(c.set))
+        mlist.sort(key=lambda c: (c.stot - c.pcount) / c.stot, reverse=True)
+        hlist = []
+        for s in self.house_sell_priority:
+            hlist.append(s) if self.deeds[s][0].bnum else None
+        hlist.sort(key=lambda c: self.deeds[c][0].bnum)
+        return mlist, hlist
+    
+    def raise_money(self, creditor, debt):
+        mlist, hlist = self.get_assets()
+        while self.wallet < debt:
+            if mlist:
+                mlist.pop(0).mortgage()
+            elif hlist:
+                h = hlist.pop(0)
+                for i in self.deeds[h]:
+                    i.sell_house()
+            else:
+                advprint(f"{self} has lost!")
+                return
+        return debt
+    
+    def to_unmortgage(self):
+        def msort(p1, p2):
+            if p1.set == p2.set:
+                if p2.rent[0] > p1.rent[0]:
+                    return p2
+                return p1
+            
+            if p1.pcount == p1.stot and p2.pcount == p2.stot:
+                mcount1 = 0
+                for i in self.deeds[p1.set]:
+                    if i.mstatus:
+                        mcount1 += 1
+                mcount2 = 0
+                for i in self.deeds[p2.set]:
+                    if i.mstatus:
+                        mcount2 += 1
+                return min(mcount1 / p1.stot, mcount2 / p2.stot)
+                    
+            if p1.stot - p1.pcount > p2.stot - p2.pcount:
+                return p1
+            return p2
+            #return min(p1.stot - p1.pcount, p2.stot - p2.pcount)
+        
+        mlist = []
+        for s in self.mort_priority[::-1]:
+            for p in self.deeds[s]:
+                mlist.append(p) if p.mstatus == True else None
+        mlist.sort(key=msort)
+        for p in mlist:
+            if self.wallet > p.mprice * 2.5:
+                p.umortgage()
+                
+    def get_mortgaged_prop(self, prop):
+        if not prop.mstatus:
+            raise ValueError("This property is not mortgaged")
+        prop.owner = self
+        if self.count_set(setname=prop.set) + 1 == prop.pcount:
+            target = prop.mprice * 2
+        else:
+            target = prop.mprice * 2.5
+        if self.wallet >= target:
+            prop.unmortgage()
+        else:
+            try:
+                self -= prop.iprice
+            except LoserError:
+                return
+    
+    def to_build(self):
+        #add check for incompleteness
+        #also add loop to go through build priority
+        adjustments = {}
+        check = False
+        for i in self.build_priority:
+            prop = self.deeds[i][0]
+            adjustments[i] = prop.bnum
+        priority_adj = sorted(self.build_priority, key=lambda c: adjustments[c], reverse=True)
+        for j in priority_adj:
+            prop = self.deeds[j][0]
+            if self.wallet > 2 * prop.bprice * prop.stot:
+                for i in self.deeds[prop.set]:
+                    prop.build_house()
+                check = True
+        return check
+                
+    def get_interest(self, prop):
+        if prop.set in ('red', 'orange'):
+            return 'yes'
+        if len(self.deeds[prop.set]):
+            return True
+    
+    def evaluate_offer(self, other, request, offer):
+        if self.game.turntotal / self.game.players < 10:
+            return False
+        if not offer.get('properties', 0):
+            return False
+        if not offer.a.get('properties', 0):
+            for i in offer['properties']:
+                if self.get_interest(i):
+                    self.eval_trade(other, request, offer)
+                    return
+        else:
+            self.evaluate_offer(offer)
+    
+    def eval_trade(self, other, request, offer):
+        def count_set(o, setname):
+            ans = 0
+            for i in o:
+                if i.set == setname:
+                    ans += 1
+            return ans
+        if self.count_props - len(request['properties']) + len(offer['properties']) < 6:
+            return False
+        oval_raw = offer['money']
+        oval_raw += offer['cards'] * 40
+        offer_value = oval_raw
+        offer_value *= 1.2 if self.count_props() < 6 else 1
+        for prop in offer['properties']:
+            pval = prop.price
+            if self.count_set(setname=prop.set) + count_set(offer, prop.set) == prop.stot:
+                pval *= 1.5
+            if self.count_set(setname=prop.set) + count_set(offer, prop.set) > 1:
+                pval *= 1.1
+            if prop.set in ('Utilities', 'Green'):
+                pval *= 0.9
+            if prop.set in ('Red', 'Orange'):
+                pval *= 1.05
+            if prop.mstatus:
+                pval *= 0.5
+            offer_value += pval
+        if offer_value < 1.5 * oval_raw:
+            return False
+        rval_raw = request['money']
+        rval_raw += request['cards'] * 40
+        request_value = rval_raw
+        request_value *= 1.2 if self.count_props() < 6 else 1
+        for prop in request['properties']:
+            if prop.pcount == prop.stot:
+                return False
+            pval = prop.price
+            if self.count_set(setname=prop.set) > 1:
+                pval *= 1.1
+            if prop.set in ('Utilities', 'Green'):
+                pval *= 0.9
+            if prop.set in ('Red', 'Orange'):
+                pval *= 1.05
+            if prop.mstatus:
+                pval *= 0.5
+            request_value += pval
+        if offer_value > request_value:
+            advprint("Trade accepted")
+            self.process_trade(other, offer, request)
+        else:
+            advprint("Trade cancelled")
+
+    def choose_target_set(self):
+        candidates = []
+        for s in self.deeds:
+            for p in self.deeds[s]:
+                if p.stot - p.pcount == 1 and p.set not in candidates:
+                    candidates.append(p)
+        if len(candidates) == 0:
+            return False
+        return candidates
+
+    def trade(self, other=None):
+        candidates = self.choose_target_set()
+        candidates.shuffle()
+        for k in candidates:
+            for i in self.game.players:
+                if i != self and i.count_set(setname=k):
+                    target = i.deeds[k][0]
+                    for j in i.deeds:
+                        ocount = i.count_set(setname=j)
+                        scount = self.count_set(setname=j)
+                        if ocount >= scount and scount != 0 and ocount + scount == self.deeds[j][0].stot:
+                            offer = self.deeds[j][0]
+                            break
+                    try:
+                        money = 0
+                        if target.price > offer.price * 1.5:
+                            money = target.price - (offer.price * 1.5) + 20
+                        elif offer.price > target.price * 1.5:
+                            money = offer.price - (target.price * 1.5) + 20
+                        ototal = {'properties': [offer], 'money': money}
+                        rtotal = {'properties': [target], 'money': money}
+                        target.owner.evaluate_offer(self, rtotal, ototal)
+                        return
+                    except:
+                        break
+
+    def to_trade(self):
+        for i in self.deeds:
+            if self.count_set(setname=i):
+                for p in self.game.players:
+                    if p.count_set(setname=i):
+                        return True
+        
+    def move(self):
+        self.state.cp.dcount = 0
+        x = self.state.move()
+        while x.doubles == 'doubles':
+            #advprint('doubles!')
+            x = self.state.move()        
+    
+    def turn(self):
+        if self.to_trade():
+            self.trade()
+        self.to_build()
+        self.to_unmortgage()
+        if self.inJail:
+            self.jail_turn
+        else:
+            self.move()
 
 def make_players(state):
     """ Makes player objects for however many players there are, and determines
@@ -320,21 +740,18 @@ def make_players(state):
     Returns:
         players (list): a list of every player object, in their turn order
     """
+    parser = ArgumentParser()
+    parser.add_argument("humans", type=int, help="the number of human players to make")
+    parser.add_argument("computers", type=int, help="the number of computer players to make")
+    args = parser.parse_args()
     players = []
-    try:
-        p_input = input('Player 1, enter your name: ')
-    except:
-        advprint('Something went wrong! Please enter a valid string as your name')
-    while p_input.lower() != 'stop':
-        p_input = p_input.replace(' ', '_')
-        p_det = Player(p_input, 0, state)
-        if p_input.lower() in protected_words:
-            advprint("Invald name")
-            continue
-        else:
-            protected_words.append(p_input.lower())
+    for i in range(args.humans):
+        p_det = HumanPlayer(state, pnum=i + 1)
+        protected_words.append(p_det.name)
         players.append(p_det)
-        p_input = input(f'Player {len(players) + 1}, enter your name: ')
+    for i in range(args.computers):
+        c = ComputerPlayer(state, pnum=i + 1) # add args
+        players.append(c)
     shuffle(players)
     x = 0
     for i in players:
@@ -346,3 +763,28 @@ def make_players(state):
 protected_words = ['player', 'property', 'railroad', 'utility', 'input', 'print',
                    'advprint', 'players', 'self', 'set', 'list', 'str', 'dict', 
                    'repr', 'copy', 'save', 'savestate']
+
+class Trade:
+    def __init__(self, initiator, reciever=None):
+        self.p1 = initiator
+        self.p2 = reciever
+        self.o, self.r = self.p1.get_offer()
+    
+    def count_set(self, setname, side):
+        ans = 0
+        if side == 'o':
+            for i in self.o['properties']:
+                if i.set == setname:
+                    ans += 1
+            return ans
+        elif side == 'r':
+            for i in self.r['properties']:
+                if i.set == setname:
+                    ans += 1
+            return ans
+        raise ValueError(f"Weird value for side: {side}")
+    
+    def __bool__(self):
+        if self.o and self.r:
+            return True
+        return False
