@@ -1,7 +1,10 @@
 # Monopoly
 My implementation of Monopoly in Python, without using Pygame
 
-When in the directory, run main.py with no arguments to play.
+Arguments required to run:
+    human_players (int): how many human players to start with
+    computer_players (int): how many computer players to start with
+Enter the desired integers after the path when running the program via the command line.
 
 Guide to commands:
 
