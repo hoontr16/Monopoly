@@ -120,7 +120,6 @@ class Movement:
                 ending = 'n'
             if not player.inJail:
                 advprint(f"{self.p.name} rolled a{ending} {self.new}")
-                #sleep(0.5)
             self.new = (self.new + self.p.loc) % 40
             #advprint(self.p.loc)
         else:
@@ -155,7 +154,6 @@ class Movement:
         self.p.loc = self.new
         #self.p.loc %= 40
         advprint(f"{self.p.name} landed on {self.nspace}!")
-        ##sleep(0.5)
         
 class Auction:
     """ An auction.

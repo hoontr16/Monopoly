@@ -1,5 +1,6 @@
 from random import randint
 from time import sleep
+import json
 
 def roll_dice():
     """Simulates a single roll of two dice.
@@ -14,5 +15,10 @@ def roll_dice():
         return [x + y, None]
     
 def advprint(*args, **kwargs):
-    print(*args, **kwargs)
-    sleep(0.3)
+    with open('config.json', 'r', encoding='utf-8') as f:
+        settings = json.load(f)
+    with open('log.txt', 'a', encoding='utf-8') as f:
+        print(*args, **kwargs, file=f)
+    if settings['printmode']:
+        print(*args, **kwargs)
+        sleep(0.3)

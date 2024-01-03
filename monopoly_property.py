@@ -133,6 +133,7 @@ class Property:
         if self.bnum == 5:
             return None
         self.bnum += num
+        advprint(f"{self.owner} built {self.name} to level {self.bnum}")
         return self.bprice * num
     
     def sell_house(self, num = 1):
@@ -154,6 +155,7 @@ class Property:
         if self.bnum == 0:
             return
         self.bnum -= num
+        advprint(f"{self.owner} sold a house on {self.name}")
         return int((self.bprice * num * 0.5) // 1)
     
     def __str__(self):
@@ -184,6 +186,7 @@ class Property:
                 return
         self.owner += self.mprice
         self.mstatus = True
+        advprint(f"{self.owner} mortgaged {self.name}")
         return True
     
     def unmortgage(self):
@@ -214,6 +217,29 @@ class Property:
         if len(self.rent) == 0 and not self.name:
             return False
         return True
+    
+    def __lt__(self, other=None):
+        if other == None:
+            return self
+        if self.set == other.set:
+            if other.rent[0] > self.rent[0]:
+                return other
+            return self
+        
+        if self.pcount == self.stot and other.pcount == other.stot:
+            mcount1 = 0
+            for i in self.deeds[self.set]:
+                if i.mstatus:
+                    mcount1 += 1
+            mcount2 = 0
+            for i in self.deeds[other.set]:
+                if i.mstatus:
+                    mcount2 += 1
+            return min(mcount1 / self.stot, mcount2 / other.stot)
+                
+        if self.stot - self.pcount > other.stot - other.pcount:
+            return self
+        return other        
     
 class Railroad(Property):
     """ A subclass of Property, for railroads.

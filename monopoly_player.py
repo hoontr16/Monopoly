@@ -3,7 +3,7 @@ from monopoly_property import Property
 from random import shuffle, randrange, choice
 from monopoly_basic_exp import advprint
 from monopoly_command import Command
-from argparse import ArgumentParser
+import json
 
 class Player:
     """ An object for a Player's current state.
@@ -207,12 +207,12 @@ class Player:
     
 class HumanPlayer(Player):
     def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.type = 'human'
-        if not name:
+        if not kwargs.get('name', False):
             while True:
                 try:
-                    p_input = input(f'Player {pnum}, enter your name: ')
+                    p_input = input(f"Player {kwargs.get('pnum', 0)}, enter your name: ")
                     p_input = p_input.replace(' ', '_')
                     if p_input.lower() in protected_words:
                         advprint("Invald name")
@@ -222,7 +222,7 @@ class HumanPlayer(Player):
                 except:
                     advprint('Something went wrong! Please enter a valid string as your name')
         else:
-            self.name = name
+            self.name = kwargs['name']
             
     def jail_turn(self):
         while True:
@@ -253,7 +253,7 @@ class HumanPlayer(Player):
             return x.text
         
     def buy_choice(self, prop):
-        a = Command(self, 'choice', "Would you like to buy it?\n")
+        a = Command(self.game, 'choice', "Would you like to buy it?\n")
         return a.action()
 
     def raise_money(self, other_p, debt):
@@ -388,7 +388,7 @@ class HumanPlayer(Player):
                     if i[0] == '$':
                         money = int(i[1:])
                     else:
-                        x = self.state.findprop(i)
+                        x = self.game.findprop(i)
                         if x:
                             props.append(x)
                         else:
@@ -446,7 +446,7 @@ class HumanPlayer(Player):
         else:
             self.trade(other)
         
-    def turn(self):
+    def do_turn(self):
         command = Command(self.game, 'turn', f'\nWhat would {self} like to do? note: only [roll, jail, build, info, trade, exit, debug, save, load, unmortgage] are currently implemented ')
         t = command.text.split(maxsplit=1)
         if t[0] == 'save':
@@ -454,17 +454,80 @@ class HumanPlayer(Player):
         elif t[0] == 'load':
             return t
         try:
-            return command.action()
+            command.action()
+            while command.text in ('info', 'debug'):
+                command = Command(self.game, 'turn', f'\nWhat would {self} like to do? note: only [roll, jail, build, info, trade, exit, debug, save, load, unmortgage] are currently implemented ')
+                command.action()
+            return 'exit'
+            #return command.text.split(maxsplit=1)
         except (ValueError, TypeError) as e:
             advprint(e)
     
+
+    def improve_property(self, bprop, bcount:str):
+        """ Handles the logic for improving properties.
+            Args:
+                builder (player): the player trying to improve their property.
+                bprop (property): the property being improved.
+                bcount (str, either '1' or '2'): how many buildings to build.
+            Side effects:
+                Prints error messages if the player cannot improve this property
+                Prints how much this purchase costs
+                Updates bprop.bnum appropriately, and subtracts the build cost from 
+                    builder's balance
+                Prints builder's new balance
+            Returns:
+                None: If one of the following is True:
+                    bprop is a railroad or utility
+                    bcount is not a number
+                    bprop already has the max number of buildings
+                    builder doesn't have enough money
+                    builder doesn't own the full color set
+                    any property in the set is mortgaged
+                    this property would have two improvements more than the member
+                        of its set with the least number of improvements
+                str: If the purchase is successful
+        """
+        if bprop.set in ['Railroads', 'Utilities']:
+            advprint("That property can't be improved")
+            return
+        try:
+            bcount1 = int(bcount)
+        except:
+            advprint("Please enter an integer for the number of buildings")
+            return
+        if bprop.bnum == 5:
+            advprint(f"{bprop.name} already has a hotel!")
+            return
+        if self.wallet < bprop.bprice * bcount1:
+            advprint("You don't have enough money!")
+            return False
+        if self.count_set(setname=bprop.set) != bprop.stot:
+            advprint("You don't own the full set!")
+            return
+        else:
+            for i in self.deeds[bprop.set]:
+                if i.mstatus == True:
+                    advprint("One of the properties in this set is mortgaged.")
+                    return
+                if bprop.bnum + bcount1 > i.bnum + 1 and bprop != i:
+                    advprint(f"You must build evenly across a set. {bprop.name} has {bprop.bnum} houses, while {i.name} only has {i.bnum}. You cannot build {bcount1} houses on {bprop.name}")
+                    return
+        choice = Command(self, 'choice', f"This will cost ${bprop.bprice * bcount1}. Are you sure? Enter y or n\n")
+        if not choice.action():
+            advprint('Purchase cancelled')
+            return
+        x = bprop.build_house(num=bcount1)
+        self -= x
+        return 'yay'    
+
 class ComputerPlayer(Player):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mort_priority = ('Utilities', 'Brown', 'Dark Blue', 'Light Blue', 'Pink', 'Green', 'Railroads', 'Yellow', 'Orange', 'Red')
         self.house_sell_priority = ('Brown', 'Light Blue', 'Yellow', 'Dark Blue', 'Green', 'Pink', 'Orange', 'Red')
         self.build_priority = ('Red', 'Orange', 'Yellow', 'Pink', 'Light Blue', 'Dark Blue', 'Green', 'Brown')
-        self.name = f"Computer {pnum}"
+        self.name = f"Computer {kwargs.get('pnum', 0)}"
         self.type = 'ai'
     
     def jail_turn(self):
@@ -472,8 +535,8 @@ class ComputerPlayer(Player):
             return 'chance'
         elif self.cc:
             return 'cc'
-        elif (self.state.turntotal / len(self.state.players) < 5\
-            or sum(self.count_set().values()) < 5) and self.state.turntotal / len(self.state.players) < 15:
+        elif (self.game.turntotal / len(self.game.players) < 5\
+            or sum(self.count_set().values()) < 5) and self.game.turntotal / len(self.game.players) < 15:
             return 'pay'
         else:
             return 'roll'
@@ -514,7 +577,10 @@ class ComputerPlayer(Player):
         mlist.sort(key=lambda c: (c.stot - c.pcount) / c.stot, reverse=True)
         hlist = []
         for s in self.house_sell_priority:
-            hlist.append(s) if self.deeds[s][0].bnum else None
+            if len(self.deeds[s]) == 0:
+                continue
+            if self.deeds[s][0].bnum:
+                hlist.append(s)
         hlist.sort(key=lambda c: self.deeds[c][0].bnum)
         return mlist, hlist
     
@@ -532,37 +598,15 @@ class ComputerPlayer(Player):
                 return
         return debt
     
-    def to_unmortgage(self):
-        def msort(p1, p2):
-            if p1.set == p2.set:
-                if p2.rent[0] > p1.rent[0]:
-                    return p2
-                return p1
-            
-            if p1.pcount == p1.stot and p2.pcount == p2.stot:
-                mcount1 = 0
-                for i in self.deeds[p1.set]:
-                    if i.mstatus:
-                        mcount1 += 1
-                mcount2 = 0
-                for i in self.deeds[p2.set]:
-                    if i.mstatus:
-                        mcount2 += 1
-                return min(mcount1 / p1.stot, mcount2 / p2.stot)
-                    
-            if p1.stot - p1.pcount > p2.stot - p2.pcount:
-                return p1
-            return p2
-            #return min(p1.stot - p1.pcount, p2.stot - p2.pcount)
-        
+    def to_unmortgage(self):        
         mlist = []
         for s in self.mort_priority[::-1]:
             for p in self.deeds[s]:
                 mlist.append(p) if p.mstatus == True else None
-        mlist.sort(key=msort)
+        mlist.sort()
         for p in mlist:
             if self.wallet > p.mprice * 2.5:
-                p.umortgage()
+                p.unmortgage()
                 
     def get_mortgaged_prop(self, prop):
         if not prop.mstatus:
@@ -582,19 +626,31 @@ class ComputerPlayer(Player):
     
     def to_build(self):
         #add check for incompleteness
-        #also add loop to go through build priority
         adjustments = {}
         check = False
         for i in self.build_priority:
-            prop = self.deeds[i][0]
-            adjustments[i] = prop.bnum
-        priority_adj = sorted(self.build_priority, key=lambda c: adjustments[c], reverse=True)
+            try:
+                prop = self.deeds[i][0]
+                adjustments[i] = prop.bnum
+            except IndexError:
+                continue
+        priority_adj = sorted(self.build_priority, key=lambda c: adjustments.get(c, 0), reverse=True)
         for j in priority_adj:
-            prop = self.deeds[j][0]
-            if self.wallet > 2 * prop.bprice * prop.stot:
+            try:
+                prop = self.deeds[j][0]
+                if self.count_set(setname=prop.set) != prop.stot or prop.bnum == 5:
+                    continue
                 for i in self.deeds[prop.set]:
-                    prop.build_house()
-                check = True
+                    if i.mstatus == True:
+                        continue
+                    if prop.bnum > i.bnum and prop != i:
+                        continue           
+                if self.wallet > 2 * prop.bprice * prop.stot:
+                    for i in self.deeds[prop.set]:
+                        i.build_house()
+                    check = True
+            except IndexError:
+                continue
         return check
                 
     def get_interest(self, prop):
@@ -667,7 +723,7 @@ class ComputerPlayer(Player):
         else:
             advprint("Trade cancelled")
 
-    def choose_target_set(self):
+    def choose_target(self):
         candidates = []
         for s in self.deeds:
             for p in self.deeds[s]:
@@ -678,12 +734,14 @@ class ComputerPlayer(Player):
         return candidates
 
     def trade(self, other=None):
-        candidates = self.choose_target_set()
-        candidates.shuffle()
+        candidates = self.choose_target()
+        if not candidates:
+            return
+        shuffle(candidates)
         for k in candidates:
             for i in self.game.players:
-                if i != self and i.count_set(setname=k):
-                    target = i.deeds[k][0]
+                if i != self and i.count_set(setname=k.set):
+                    target = i.deeds[k.set][0]
                     for j in i.deeds:
                         ocount = i.count_set(setname=j)
                         scount = self.count_set(setname=j)
@@ -711,21 +769,18 @@ class ComputerPlayer(Player):
                         return True
         
     def move(self):
-        self.state.cp.dcount = 0
-        x = self.state.move()
+        self.game.cp.dcount = 0
+        x = self.game.move()
         while x.doubles == 'doubles':
-            #advprint('doubles!')
-            x = self.state.move()        
+            x = self.game.move()        
     
-    def turn(self):
+    def do_turn(self):
         if self.to_trade():
             self.trade()
         self.to_build()
         self.to_unmortgage()
-        if self.inJail:
-            self.jail_turn
-        else:
-            self.move()
+        self.move()
+        return 'exit'
 
 def make_players(state):
     """ Makes player objects for however many players there are, and determines
@@ -740,16 +795,14 @@ def make_players(state):
     Returns:
         players (list): a list of every player object, in their turn order
     """
-    parser = ArgumentParser()
-    parser.add_argument("humans", type=int, help="the number of human players to make")
-    parser.add_argument("computers", type=int, help="the number of computer players to make")
-    args = parser.parse_args()
+    with open('config.json', 'r', encoding='utf-8') as f:
+        settings = json.load(f)
     players = []
-    for i in range(args.humans):
+    for i in range(settings['humans']):
         p_det = HumanPlayer(state, pnum=i + 1)
         protected_words.append(p_det.name)
         players.append(p_det)
-    for i in range(args.computers):
+    for i in range(settings['computers']):
         c = ComputerPlayer(state, pnum=i + 1) # add args
         players.append(c)
     shuffle(players)
@@ -763,28 +816,3 @@ def make_players(state):
 protected_words = ['player', 'property', 'railroad', 'utility', 'input', 'print',
                    'advprint', 'players', 'self', 'set', 'list', 'str', 'dict', 
                    'repr', 'copy', 'save', 'savestate']
-
-class Trade:
-    def __init__(self, initiator, reciever=None):
-        self.p1 = initiator
-        self.p2 = reciever
-        self.o, self.r = self.p1.get_offer()
-    
-    def count_set(self, setname, side):
-        ans = 0
-        if side == 'o':
-            for i in self.o['properties']:
-                if i.set == setname:
-                    ans += 1
-            return ans
-        elif side == 'r':
-            for i in self.r['properties']:
-                if i.set == setname:
-                    ans += 1
-            return ans
-        raise ValueError(f"Weird value for side: {side}")
-    
-    def __bool__(self):
-        if self.o and self.r:
-            return True
-        return False

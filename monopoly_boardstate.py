@@ -31,10 +31,6 @@ class BoardState:
         Side effects:
             sets attributes to their default values
         """
-        if pdef:
-            self.players = pdef
-        else:
-            self.players = make_players(self)
         self.turn = 0
         self.board = board_spaces
         self.special = {'Go', 'Community Chest', 'Income Tax', 'Chance', 'Jail', 'Free Parking', 'Luxury Tax', 'Go To Jail'}
@@ -43,6 +39,15 @@ class BoardState:
         self.cc = Deck('cc')
         self.plost = []
         self.time = asctime(localtime(time()))
+        if pdef:
+            self.players = pdef
+        else:
+            self.players = make_players(self)
+        with open('config.py', 'w') as f:
+            if self.check_humans():
+                f.write('printmode = 1')
+            else:
+                f.write('printmode = 0')
         
     def __repr__(self):
         return f"<BoardState object saved at {self.time}>"
@@ -196,6 +201,7 @@ class BoardState:
         """
         my_move = Movement(self.cp, new_loc = new_loc)
         if my_move.doubles:
+            advprint('doubles!')
             self.cp.dcount += 1
         if self.cp.inJail or self.cp.dcount == 3:
             outcome = self.in_jail()
@@ -225,7 +231,7 @@ class BoardState:
                     auc = Auction(cprop, [p for p in self.players if p not in self.plost], self)
                     if auc.auc():
                         self.buy_property(auc.cp, cprop, other_price=auc.cbid)
-            else:
+            elif cprop.owner != self.cp:
                 cprop.pay_rent(cprop.owner, self.cp)
             #elif cprop.get_rent() <= self.cp.wallet:
             #    cprop.pay_rent(cprop.owner, self.cp)
@@ -342,7 +348,7 @@ class BoardState:
                 self.cp.inJail = True
                 advprint(f"{self.cp.name} is going directly to Jail!")
             elif ind == 6:
-                for p in self.cp:
+                for p in self.players:
                     p.creditor = self.cp
                     p -= 50
                     self.cp += 50
@@ -422,7 +428,7 @@ class BoardState:
             elif space == 'Chance':
                 self.do_chance()
                 if len(self.chance) == 0:
-                    if self.check_card[0]:
+                    if self.check_card()[0]:
                         self.chance.refresh(taken=True)
                     else:
                         self.chance.refresh()
@@ -443,7 +449,7 @@ class BoardState:
                 mortgaged status
             gives their GOJF cards to the appropriate party
         """
-        if not creditor:
+        if creditor == 'the Bank':
             for aset in loser.deeds:
                 for p in aset:
                     p.mstatus = None
@@ -455,7 +461,7 @@ class BoardState:
                             i.pcount = len(auc.cp.deeds[p.set])
                     else:
                         p.owner = None
-            loser.chance, loser.cc = 0
+            loser.chance, loser.cc = 0, 0
         else:
             try:
                 for aset in loser.deeds:
@@ -470,7 +476,7 @@ class BoardState:
                 return
             creditor.chance += loser.chance
             creditor.cc += loser.cc
-            loser.chance, loser.cc = 0
+            loser.chance, loser.cc = 0, 0
         self.plost.append(loser)
                         
     def check_card(self):
@@ -482,60 +488,9 @@ class BoardState:
             if p.cc:
                 cc_count += 1
         return chance_count, cc_count
-
-    def improve_property(self, builder, bprop, bcount:str):
-        """ Handles the logic for improving properties.
-            Args:
-                builder (player): the player trying to improve their property.
-                bprop (property): the property being improved.
-                bcount (str, either '1' or '2'): how many buildings to build.
-            Side effects:
-                Prints error messages if the player cannot improve this property
-                Prints how much this purchase costs
-                Updates bprop.bnum appropriately, and subtracts the build cost from 
-                    builder's balance
-                Prints builder's new balance
-            Returns:
-                None: If one of the following is True:
-                    bprop is a railroad or utility
-                    bcount is not a number
-                    bprop already has the max number of buildings
-                    builder doesn't have enough money
-                    builder doesn't own the full color set
-                    any property in the set is mortgaged
-                    this property would have two improvements more than the member
-                        of its set with the least number of improvements
-                str: If the purchase is successful
-        """
-        if bprop.set in ['Railroads', 'Utilities']:
-            advprint("That property can't be improved")
-            return None
-        try:
-            bcount1 = int(bcount)
-        except:
-            advprint("Please enter an integer for the number of buildings")
-            return None
-        if bprop.bnum == 5:
-            advprint(f"{bprop.name} already has a hotel!")
-            return None
-        if builder.wallet < bprop.bprice * bcount1:
-            advprint("You don't have enough money!")
-            return False
-        if builder.count_set(setname=bprop.set) != bprop.stot:
-            advprint("You don't own the full set!")
-            return None
-        else:
-            for i in builder.deeds[bprop.set]:
-                if i.mstatus == True:
-                    advprint("One of the properties in this set is mortgaged.")
-                    return None
-                if bprop.bnum + bcount1 > i.bnum + 1 and bprop != i:
-                    advprint(f"You must build evenly across a set. {bprop.name} has {bprop.bnum} houses, while {i.name} only has {i.bnum}. You cannot build {bcount1} houses on {bprop.name}")
-                    return None
-        choice = Command(self, 'choice', f"This will cost ${bprop.bprice * bcount1}. Are you sure? Enter y or n\n")
-        if not choice.action():
-            advprint('Purchase cancelled')
-            return
-        x = bprop.build_house(num=bcount1)
-        builder -= x
-        return 'yay'
+    
+    def check_humans(self):
+        for i in self.players:
+            if i.type == 'human':
+                return True
+        return False

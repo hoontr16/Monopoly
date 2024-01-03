@@ -11,6 +11,8 @@ class Command:
             self.oldtype = self.type
             self.type = 'trade'
         self.prompt = prompt
+        with open('log.txt', 'a', encoding='utf-8') as f:
+            f.write(f"{prompt}: {self.text}")
         
     def action(self):
         if self.text == 'info':
@@ -92,14 +94,14 @@ class Command:
                         advprint("To improve a property, use this format: 'build', property, # of buildings")
                         return 'loop'
                     current_prop = self.state.find_prop(bcomm[1])
-                    z = self.state.improve_property(self.state.cp, current_prop, bcomm[2], self.state)
+                    z = self.state.cp.improve_property(current_prop, bcomm[2])
                     if z == False:
                         choice = ''
                         while choice not in ('y', 'n'):
                             choice = Command(self.state, 'choice', 'Would you like to raise money for this? y or n\n').text
                         if choice.action():
                             self.state.raise_money(self.state.cp, 'the Bank', current_prop.bprice)
-                            self.state.improve_property(self.state.cp, current_prop, bcomm[2], self.state)
+                            self.state.cp.improve_property(current_prop, bcomm[2])
                     return 'loop'
                 elif self.text == 'exit':
                     if Command(self.state, 'choice', 'Are you sure you want to exit? y or n ').text == 'y':
